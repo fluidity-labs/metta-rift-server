@@ -24,8 +24,8 @@ The game includes a built-in console where players can observe all actions taken
 
 ```sh
 # Clone the repository
-git clone https://github.com/yourusername/metta-rift.git
-cd metta-rift
+git clone https://github.com/philipesantos/metta-rift-backend.git
+cd metta-rift-backend
 
 # Install dependencies
 pip install -r requirements.txt
