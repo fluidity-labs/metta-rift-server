@@ -2,7 +2,7 @@
 
 **MeTTa Rift** is a fun and educational text-based RPG that showcases the power of [OpenCog Hyperon](https://hyperon.opencog.org/) and the [MeTTa language](https://metta-lang.dev/). It features a procedurally generated world with advanced reasoning and memory management capabilities. Designed to foster community adoption and engagement, MeTTa Rift serves as an interactive way to explore and expand the utility of MeTTa while immersing players in a dynamic AI-driven experience.
 
-The game includes a built-in console where players can observe all actions taken by MeTTa during gameplay, providing transparency into its decision-making and reasoning process. Additionally, an admin mode allows any user to perform any action, offering deeper exploration and experimentation with MeTTa’s capabilities.
+The game includes a built-in console where players can observe all actions taken by MeTTa during gameplay, providing transparency into its decision-making and reasoning process. Additionally, an admin mode allows any query or action to be performed, offering deeper exploration and experimentation with MeTTa’s full capabilities.
 
 ## Features
 
@@ -18,6 +18,7 @@ The game includes a built-in console where players can observe all actions taken
 ### Prerequisites
 - **Python 3.8+**  
 - **pip** (Python package manager)
+- **Linux/macOS** (Hyperon is currently not available on Windows)
 
 ### Installation
 
