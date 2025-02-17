@@ -26,7 +26,10 @@ async def handle_connection(websocket: ServerConnection):
 
 
 async def main():
-    async with serve(handle_connection, "localhost", 6789) as server:
+    host = "localhost"
+    port = 6789
+    async with serve(handle_connection, host, port) as server:
+        print(f"Server started at ws://{host}:{port}")
         await server.serve_forever()
 
 
