@@ -1,4 +1,6 @@
-# MeTTa Rift
+# MeTTa Rift – Backend
+
+> **Note:** This repository contains the backend of MeTTa Rift. If you're looking for the frontend, visit [MeTTa Rift – Frontend](https://github.com/philipesantos/metta-rift-frontend).
 
 **MeTTa Rift** is a fun and educational text-based RPG that showcases the power of [OpenCog Hyperon](https://hyperon.opencog.org/) and the [MeTTa language](https://metta-lang.dev/). It features a procedurally generated world with advanced reasoning and memory management capabilities. Designed to foster community adoption and engagement, MeTTa Rift serves as an interactive way to explore and expand the utility of MeTTa while immersing players in a dynamic AI-driven experience.
 
@@ -19,6 +21,7 @@ The game includes a built-in console where players can observe all actions taken
 - **Python 3.8+**  
 - **pip** (Python package manager)
 - **Linux/macOS** (Hyperon is currently not available on Windows)
+- [**MeTTa Rift – Frontend**](https://github.com/philipesantos/metta-rift-frontend)
 
 ### Installation
 
@@ -34,7 +37,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-## Technology Behind MeTTa Rift
+## Tech Stack
 
 [MeTTa](https://metta-lang.dev/) (Meta Type Talk) is a multi-paradigm language for declarative and functional computations over knowledge (meta)graphs.
 
