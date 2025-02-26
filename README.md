@@ -1,6 +1,6 @@
-# MeTTa Rift – Backend
+# MeTTa Rift – Server
 
-> **Note:** This repository contains the backend of MeTTa Rift. If you're looking for the frontend, visit [MeTTa Rift – Frontend](https://github.com/philipesantos/metta-rift-frontend).
+> **Note:** This repository contains the server for MeTTa Rift. If you're looking for the client, visit [MeTTa Rift – Client](https://github.com/fluidity-labs/metta-rift-client).
 
 **MeTTa Rift** is a fun and educational text-based RPG that showcases the power of [OpenCog Hyperon](https://hyperon.opencog.org/) and the [MeTTa language](https://metta-lang.dev/). It features a procedurally generated world with advanced reasoning and memory management capabilities. Designed to foster community adoption and engagement, MeTTa Rift serves as an interactive way to explore and expand the utility of MeTTa while immersing players in a dynamic AI-driven experience.
 
@@ -21,14 +21,14 @@ The game includes a built-in console where players can observe all actions taken
 - **Python 3.8+**  
 - **pip** (Python package manager)
 - **Linux/macOS** (Hyperon is currently not available on Windows)
-- [**MeTTa Rift – Frontend**](https://github.com/philipesantos/metta-rift-frontend)
+- [**MeTTa Rift – Client**](https://github.com/fluidity-labs/metta-rift-client)
 
 ### Installation
 
 ```sh
 # Clone the repository
-git clone https://github.com/philipesantos/metta-rift-backend.git
-cd metta-rift-backend
+git clone https://github.com/fluidity-labs/metta-rift-server.git
+cd metta-rift-server
 
 # Install dependencies
 pip install -r requirements.txt
