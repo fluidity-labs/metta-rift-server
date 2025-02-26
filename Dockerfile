@@ -1,5 +1,5 @@
 # Stage 1: Build stage
-FROM python:3.12-slim AS build
+FROM python:3.12-slim AS builder
 
 # Set working directory
 WORKDIR /app
@@ -18,8 +18,8 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # Copy installed dependencies from builder stage
-COPY --from=build /usr/local /usr/local
-COPY --from=build /app/main.py .
+COPY --from=builder /usr/local /usr/local
+COPY --from=builder /app/main.py .
 
 # Set environment variables
 ENV WS_HOST=0.0.0.0
