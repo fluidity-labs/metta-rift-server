@@ -1,6 +1,7 @@
 import asyncio
 import json
 import itertools
+import os
 
 from websockets import ConnectionClosedOK
 from websockets.asyncio.server import serve, ServerConnection
@@ -125,8 +126,8 @@ def create_message(message_id: int, message_type: str, message_text: str):
 
 
 async def main():
-    host = "localhost"
-    port = 6789
+    host = os.getenv("WS_HOST", "localhost")
+    port = int(os.getenv("WS_PORT", "6789"))
     async with serve(handle_connection, host, port) as server:
         print(f"Server started at ws://{host}:{port}")
         await server.serve_forever()
