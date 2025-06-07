@@ -18,7 +18,7 @@ app = Flask(__name__)
 MESSAGE_TYPE_SYSTEM: str = "SYSTEM"
 MESSAGE_TYPE_PLAYER: str = "PLAYER"
 
-FILES_DIR = "generated/metta"
+FILES_DIR = "/tmp"
 
 async def handle_connection(websocket: ServerConnection):
     metta_code = generate_metta_code()
