@@ -22,10 +22,13 @@ COPY --from=builder /usr/local /usr/local
 COPY --from=builder /app/main.py .
 
 # Set environment variables
+ENV FLASK_HOST=0.0.0.0
+ENV FLASK_PORT=8080
 ENV WS_HOST=0.0.0.0
 ENV WS_PORT=6789
 
 # Expose WebSocket port
+EXPOSE 8080
 EXPOSE 6789
 
 # Command to run the WebSocket server

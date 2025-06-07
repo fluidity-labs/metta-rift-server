@@ -2,119 +2,56 @@ import asyncio
 import json
 import itertools
 import os
+import random
+import textwrap
+import uuid
+from typing import List, Dict
+import threading
+from urllib.parse import urlparse, parse_qs
 
-from websockets import ConnectionClosedOK
+from flask import Flask, send_from_directory
+
+from websockets import ConnectionClosedOK, ConnectionClosedError
 from websockets.asyncio.server import serve, ServerConnection
 from hyperon import MeTTa
 
+app = Flask(__name__)
+
 MESSAGE_TYPE_SYSTEM: str = "SYSTEM"
-MESSAGE_TYPE_USER: str = "USER"
+MESSAGE_TYPE_PLAYER: str = "PLAYER"
+
+FILES_DIR = "generated/metta"
+BASE_URL   = "http://localhost:5000/files"
 
 async def handle_connection(websocket: ServerConnection):
+    path = websocket.request.path
+    query = urlparse(path).query
+    params = parse_qs(query)
+    base_url = params.get("base_url", [None])[0]
+
+    metta_code = generate_metta_code()
+    filename = save_metta_file(metta_code)
+
     # Initialize a new MeTTa (Hyperon) instance for the connected user
     metta = MeTTa()
-    metta.run("""
-        (: valley1 Location) ; sets the type of valley1 to Location
-        (= (Location valley1 name) "Duskrend Valley") ; sets the name of valley1
-        
-        (: glade1 Location)
-        (= (Location glade1 name) "Emberbloom Glade ")
-        
-        (: city1 Location)
-        (= (Location city1 name) "Ironspire")
-        
-        (: cavern1 Location)
-        (= (Location cavern1 name) "Gloomshear Cavern")
-        
-        (: road1 Location)
-        (= (Location road1 name) "Ashen Hollow Road")
-        
-        (: road2 Location)
-        (= (Location road2 name) "Veilshade Path")
-        
-        (: road3 Location)
-        (= (Location road3 name) "Bloodthorn Trail")
-        
-        (: road4 Location)
-        (= (Location road4 name) "Echo Run")
-        
-        (: road5 Location)
-        (= (Location road5 name) "Iron Hollow Way")
-        
-        (= (Route valley1 road1)) ; creates a connection between two locations
-        (= (Route road1 city1))
-        (= (Route city1 road2))
-        (= (Route road2 glade1))
-        (= (Route road5 road4))
-        (= (Route road4 road3))
-        (= (Route road3 cavern1))
-        (= (Route city1 road4))
-        
-        (: hero Character) ; sets the type of hero to Character
-        (= (Character hero name) "John") ; sets the name of hero
-        (= (Character hero hp) 100)
-        (= (Character hero speed) 2)
-        (= (Character hero attack) 5)
-        (= (Character hero defense) 10)
-        (= (Character hero location) city1)
-        
-        (: goblin Monster) ; sets the type of goblin to Monster
-        (= (Monster goblin name) "Grimzle Snaggletooth") ; sets the name of goblin
-        (= (Monster goblin hp) 20)
-        (= (Monster goblin speed) 5)
-        (= (Monster goblin attack) 2)
-        (= (Monster goblin defense) 0)
-        (= (Monster goblin location) road4)
-        
-        (: dragon Monster) ; sets the type of dragon to Monster
-        (= (Monster dragon name) "Vortharyx the Emberfang") ; sets the name of dragon
-        (= (Monster dragon hp) 200)
-        (= (Monster dragon speed) 3)
-        (= (Monster dragon attack) 20)
-        (= (Monster dragon defense) 15)
-        (= (Monster dragon location) cavern1)
-        
-        (= (Damages hero goblin) 10) ; hero applies damage to goblin
-        (= (Damages goblin hero) 2) ; goblin applies damage to hero
-        (= (Damages hero goblin) 8)
-        (= (Damages goblin hero) 3)     
-
-        ; cheat sheet
-        ; match all atoms of a type:          ! (match &self (: $x Monster) $x)
-        ; get a specific property of an atom: ! (Monster dragon hp)
-        ; get damage done by hero to goblin:  ! (Damages hero $x)
-        ; get all damage taken by hero:       ! (Damages $x hero)
-        
-        ; to do
-        ; damage function
-        ; get hp function
-        ; get location function
-        ; get available routes
-        ; move function
-        ; is_defeated function
-        ; add quests with rewards
-        ; add items
-        ; add non-player characters (with dialogues that dynamically changes, based on reputation and other things)
-        ; add puzzles (riddle with open answer, locks with combinations, wordle-like)
-        
-    """)
+    result = metta.run(metta_code)
 
     message_counter = itertools.count(0)
 
-    # Send a welcome message
-    welcome_message = "Try writing some MeTTa code in the input below!"
-    await websocket.send(create_message(next(message_counter), MESSAGE_TYPE_SYSTEM, welcome_message))
+    await websocket.send(create_message(next(message_counter), MESSAGE_TYPE_SYSTEM,
+        f"<a target='_blank' href='{base_url}/generated/metta/{filename}'>Download the generated MeTTa file</a>."))
+    await websocket.send(create_message(next(message_counter), MESSAGE_TYPE_SYSTEM, str(result)))
 
-    async for message in websocket:
-        try:
+    try:
+        async for message in websocket:
             # Process incoming messages and evaluate them using MeTTa
-            await websocket.send(create_message(next(message_counter), MESSAGE_TYPE_USER, message))
+            await websocket.send(create_message(next(message_counter), MESSAGE_TYPE_PLAYER, message))
             result = metta.run(message)
 
             # Send the result back to the client
             await websocket.send(create_message(next(message_counter), MESSAGE_TYPE_SYSTEM, str(result)))
-        except ConnectionClosedOK:
-            print("Connection closed.")
+    except (ConnectionClosedOK, ConnectionClosedError):
+        print("Connection closed.")
 
 
 def create_message(message_id: int, message_type: str, message_text: str):
@@ -125,7 +62,322 @@ def create_message(message_id: int, message_type: str, message_text: str):
     })
 
 
+def create_room_mapping(rooms: List[str]) -> Dict[str, List[str]]:
+    start, others = rooms[0], rooms[1:]
+
+    # Randomly split the other rooms into two non-empty groups
+    split = random.randint(1, len(others) - 1)
+    group1 = random.sample(others, split)
+    group2 = [r for r in others if r not in group1]
+
+    # Shuffle inside each branch to randomize order
+    random.shuffle(group1)
+    random.shuffle(group2)
+
+    # Initialize mapping: every room -> empty list
+    mapping = {room: [] for room in rooms}
+
+    # White room points to first of each branch
+    mapping[start] = [group1[0], group2[0]]
+
+    # Chain each branch so each room points to its successor
+    for branch in (group1, group2):
+        for curr, nxt in zip(branch, branch[1:]):
+            mapping[curr] = [nxt]
+        # last room already has [] by default
+
+    return mapping
+
+
+def save_metta_file(code: str) -> str:
+    unique_id = uuid.uuid4()
+    filename = f"{unique_id}.metta"
+    path = os.path.join(FILES_DIR, filename)
+    with open(path, "w") as f:
+        f.write(code)
+    return filename
+
+
+def generate_metta_code():
+    rooms = ['white_room', 'red_room', 'blue_room', 'yellow_room']
+    rooms_mapping = create_room_mapping(rooms)
+    route_lines = "\n".join(
+        f"(Route {room} {nxt})"
+        for room, succs in rooms_mapping.items()
+        for nxt in succs
+    )
+
+    others = rooms[1:]
+    mech1_room = random.choice(others)
+    lever_room = random.choice([r for r in others if r != mech1_room])
+
+    at_lines = "\n".join([
+        f"(At mechanism1 {mech1_room})",
+        f"(At lever {lever_room})"
+    ])
+
+    TEMPLATE = textwrap.dedent("""\
+        ; Types
+
+        (: player Character)
+        (: strange_figure Character)
+
+        (: white_room Location)
+        (: red_room Location)
+        (: blue_room Location)
+        (: yellow_room Location)
+
+        (: mechanism1 Object)
+        (: mechanism2 Object)
+        (: lever Object)
+
+        ; Facts
+
+        (Character player)
+        (Character strange_figure)
+
+        (Location white_room)
+        (Location red_room)
+        (Location blue_room)
+        (Location yellow_room)
+
+        {route_lines}
+
+        (Object door)
+        (Object hole)
+        (Object mechanism1)
+        (Object mechanism2)
+        (Object lever)
+
+        ; Dynamic
+
+        (At hole white_room)
+        (At door white_room)
+        (At mechanism2 white_room)
+        (At player white_room)
+        (At strange_figure white_room)
+
+        {at_lines}
+
+        ; Functions
+
+        (= (do $a $b) (match &self $a (match &self $b True)))
+
+        (= (exists $atom)
+            (case (match &self $atom True)
+            (
+                (True   True)
+                (Empty  False)
+            ))
+        )
+
+        (= (same-location $a $b)
+            (if (and
+                    (exists (At $a $x))
+                    (exists (At $b $x))
+                )
+                (== 
+                    (match &self (At $a $x) $x) 
+                    (match &self (At $b $x) $x)
+                )
+                False
+            )
+        )
+
+        (= (talk $who) 
+            (if (same-location player $who) 
+                (do-talk $who)
+                "Talk to... whom?" 
+            )
+        )
+
+        (= (do-talk player) "Talking to yourself now? That's... fine. Probably.")
+        (= (do-talk strange_figure) "Without saying a word, the strange figure just points at the door.")
+
+        (= (get $what) 
+            (if (same-location player $what)
+                (do-get $what)
+                "Get... what?"
+            )
+        )
+
+        (= (do-get lever) 
+            (do
+                (match &self (At lever $x) (remove-atom &self (At lever $x))) 
+                (add-atom &self (Has player lever))
+            )
+        )
+        (= (do-get lever) "You pick up the lever.")
+
+        (= (ask $who $what) 
+            (if (same-location player $who)
+                (do-ask $who $what)
+                "Ask... whom?"
+            )
+        )
+
+        (= (do-ask strange_figure lever)
+            "The strange figure silently raises a finger and points toward a small hole in the wall."
+        )
+
+        (= (describe-location white_room) "You are in a white room.")
+        (= (describe-location red_room) "You are in a red room.")
+        (= (describe-location blue_room) "You are in a blue room.")
+        (= (describe-location yellow_room) "You are in a yellow room.")
+        (= (describe-location $what) (empty))
+
+        (= (move $where)
+            (match &self (At player $x)
+                (if 
+                    (or 
+                        (exists (Route $x $where))
+                        (exists (Route $where $x))
+                    )
+                    (do-move $where)
+                    "Go... where?"
+                )
+            )
+        )
+
+        (= (do-move $where)
+            (do
+                (match &self (At player $x) (remove-atom &self (At player $x))) 
+                (add-atom &self (At player $where))
+            )
+        )
+
+        (= (do-move $where) (describe-location $where))
+
+        (= (examine $what) 
+            (if (same-location player $what)
+                (do-examine $what)
+                "Examine... what?"
+            )
+        )
+
+        (= (do-examine door) "A large wooden door.")
+
+        (= (do-examine door)
+            (if (and 
+                    (exists (Unlocked lock1))
+                    (exists (Unlocked lock2))
+                )
+                "Hey! The door is open now, revealing the path beyond. What do you want to do?"
+                (if (or
+                        (exists (Unlocked lock1))
+                        (exists (Unlocked lock2))
+                    )
+                    "It's still locked... but something feels different."
+                    "It is locked."
+                )
+            )
+        )
+
+        (= (do-examine hole ) "A round hole sits in the wall. It doesn't look like damage—it's precise, as if designed to hold something.")
+        (= (do-examine lever) "A common lever. Maybe you can use it somewhere.")
+        (= (do-examine mechanism1) "Some kind of mechanism — incomplete, perhaps?")
+        (= (do-examine strange_figure) "A tall figure cloaked in dark, tattered robes, its face hidden under a deep hood. ")
+        (= (do-examine $what) (empty))
+
+        (= (look-around) 
+            (match &self (At player $where)
+                (do-look-around (match &self (At $what $where) $what))
+            )
+        )
+
+        (= (look-around) 
+            (match &self (At player $where)
+                (do-look-around (match &self (Route $where $whereto) $whereto))
+            )
+        )
+
+        (= (look-around) 
+            (match &self (At player $where)
+                (do-look-around (match &self (Route $whereto $where) $whereto))
+            )
+        )
+
+        (= (do-look-around door) "A door")
+        (= (do-look-around mechanism1) "A mechanism")
+        (= (do-look-around lever) "A lever")
+        (= (do-look-around strange_figure) "A strange figure")
+        (= (do-look-around white_room) "White room entrance")
+        (= (do-look-around red_room) "Red room entrance")
+        (= (do-look-around blue_room) "Blue room entrance")
+        (= (do-look-around yellow_room) "Yellow room entrance")
+
+        (= (do-look-around $what) (empty))
+
+        (= (can-use $what) (exists (Has player $what)))
+
+        (= (use $what)
+            (if (can-use $what)
+                (do-use lever)
+                "Use... what?"
+            )
+        )
+
+        (= (use $what $onwhat)
+            (if (and
+                    (same-location player $onwhat)
+                    (can-use $what)
+                )
+                (do-use $what $onwhat)
+                "Use... on what?"
+            )
+        )
+
+        (= (do-use lever) "Use the lever where... exactly?")
+
+        (= (do-use lever mechanism1) "You use the lever on the mechanism. It must've done something... right?")
+        (= (do-use lever mechanism1) (add-atom &self (Unlocked lock1)))
+
+        (= (do-use lever hole) "You insert the lever into the hole and give it a turn. What now?")
+        (= (do-use lever hole) (add-atom &self (Unlocked lock2)))
+
+        (= (exit) 
+            (if (and 
+                    (exists (Unlocked lock1))
+                    (exists (Unlocked lock2))
+                )
+                "You step through the door, leaving the white room behind. The strange figure watches in silence, a flicker of sadness in its eyes — but it doesn't stop you."
+                "You can't leave — the main door is locked."
+            )
+        )
+
+        (= (stay) 
+            (do
+                (remove-atom &self (Unlocked lock1))
+                (remove-atom &self (Unlocked lock2))
+            )
+        )
+        (= (stay) "The door locks again. Great. The creepy figure actually looks... happy?")
+
+        !("You wake in a white room, sterile and silent. No memory of how you got here.")
+    """)
+
+    return TEMPLATE.format(
+        at_lines=at_lines,
+        route_lines=route_lines
+    )
+
+
+@app.route("/generated/metta/<filename>")
+def serve_file(filename):
+    return send_from_directory(FILES_DIR, filename, mimetype="text/plain")
+
+
+def start_flask():
+    host = os.getenv("FLASK_HOST", "localhost")
+    port = os.getenv("FLASK_PORT", 8080)
+    print(f"Flask serving on http://{host}:{port} (in background)")
+    app.run(host=host, port=port, use_reloader=False)
+
+
 async def main():
+    flask_thread = threading.Thread(target=start_flask, daemon=True)
+    flask_thread.start()
+
     host = os.getenv("WS_HOST", "localhost")
     port = int(os.getenv("WS_PORT", "6789"))
     async with serve(handle_connection, host, port) as server:
