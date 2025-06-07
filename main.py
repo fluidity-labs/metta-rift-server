@@ -5,12 +5,12 @@ import os
 import random
 import textwrap
 import uuid
-from typing import List, Dict
 import threading
+import logging
+
+from typing import List, Dict
 from urllib.parse import urlparse, parse_qs
-
 from flask import Flask, send_from_directory
-
 from websockets import ConnectionClosedOK, ConnectionClosedError
 from websockets.asyncio.server import serve, ServerConnection
 from hyperon import MeTTa
@@ -375,6 +375,10 @@ def start_flask():
 
 
 async def main():
+    logging.basicConfig(level=logging.DEBUG)
+    logging.getLogger("websockets.protocol").setLevel(logging.DEBUG)
+    logging.getLogger("websockets.server").setLevel(logging.DEBUG)
+
     flask_thread = threading.Thread(target=start_flask, daemon=True)
     flask_thread.start()
 
