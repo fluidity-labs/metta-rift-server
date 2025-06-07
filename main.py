@@ -6,10 +6,8 @@ import random
 import textwrap
 import uuid
 import threading
-import logging
 
 from typing import List, Dict
-from urllib.parse import urlparse, parse_qs
 from flask import Flask, send_from_directory
 from websockets import ConnectionClosedOK, ConnectionClosedError
 from websockets.asyncio.server import serve, ServerConnection
@@ -21,14 +19,8 @@ MESSAGE_TYPE_SYSTEM: str = "SYSTEM"
 MESSAGE_TYPE_PLAYER: str = "PLAYER"
 
 FILES_DIR = "generated/metta"
-BASE_URL   = "http://localhost:5000/files"
 
 async def handle_connection(websocket: ServerConnection):
-    path = websocket.request.path
-    query = urlparse(path).query
-    params = parse_qs(query)
-    base_url = params.get("base_url", [None])[0]
-
     metta_code = generate_metta_code()
     filename = save_metta_file(metta_code)
 
@@ -39,7 +31,7 @@ async def handle_connection(websocket: ServerConnection):
     message_counter = itertools.count(0)
 
     await websocket.send(create_message(next(message_counter), MESSAGE_TYPE_SYSTEM,
-        f"<a target='_blank' href='{base_url}/generated/metta/{filename}'>Download the generated MeTTa file</a>."))
+        f"<a target='_blank' href='https://services.metta-rift.fluiditylabs.dev/api/generated/metta/{filename}'>Download the generated MeTTa file</a>."))
     await websocket.send(create_message(next(message_counter), MESSAGE_TYPE_SYSTEM, str(result)))
 
     try:
@@ -362,7 +354,7 @@ def generate_metta_code():
     )
 
 
-@app.route("/generated/metta/<filename>")
+@app.route("/api/generated/metta/<filename>")
 def serve_file(filename):
     return send_from_directory(FILES_DIR, filename, mimetype="text/plain")
 
@@ -375,15 +367,11 @@ def start_flask():
 
 
 async def main():
-    logging.basicConfig(level=logging.DEBUG)
-    logging.getLogger("websockets.protocol").setLevel(logging.DEBUG)
-    logging.getLogger("websockets.server").setLevel(logging.DEBUG)
-
     flask_thread = threading.Thread(target=start_flask, daemon=True)
     flask_thread.start()
 
     host = os.getenv("WS_HOST", "localhost")
-    port = int(os.getenv("WS_PORT", "6789"))
+    port = os.getenv("WS_PORT", 6789)
     async with serve(handle_connection, host, port) as server:
         print(f"Server started at ws://{host}:{port}")
         await server.serve_forever()
