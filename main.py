@@ -4,7 +4,6 @@ import itertools
 import os
 import random
 import textwrap
-import uuid
 import threading
 
 from typing import List, Dict
@@ -12,46 +11,102 @@ from flask import Flask, send_from_directory
 from websockets import ConnectionClosedOK, ConnectionClosedError
 from websockets.asyncio.server import serve, ServerConnection
 from hyperon import MeTTa
+from sentence_transformers import SentenceTransformer, util
 
 app = Flask(__name__)
 
-MESSAGE_TYPE_SYSTEM: str = "SYSTEM"
-MESSAGE_TYPE_PLAYER: str = "PLAYER"
-
 FILES_DIR = "/tmp"
+
+NLP_CANONICALS = {
+    "show me the intro": "intro",
+    "talk to strange figure": "talk strange_figure",
+    "talk to player": "talk player",
+    "get lever": "get lever",
+    "ask strange figure about lever": "ask strange_figure lever",
+    "move to white room": "move white_room",
+    "move to red room": "move red_room",
+    "move to blue room": "move blue_room",
+    "move to yellow room": "move yellow_room",
+    "examine door": "examine door",
+    "examine hole": "examine hole",
+    "examine lever": "examine lever",
+    "examine mechanism": "examine mechanism1",
+    "examine strange figure": "examine strange_figure",
+    "look around": "look-around",
+    "use lever": "use lever",
+    "use lever on mechanism": "use lever mechanism1",
+    "user lever on hole": "use lever hole",
+    "leave": "leave",
+    "stay": "stay"
+}
+
+nlp_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+
+canonical_embeddings = nlp_model.encode(list(NLP_CANONICALS.keys()), normalize_embeddings=True)
 
 async def handle_connection(websocket: ServerConnection):
     metta_code = generate_metta_code()
-    filename = save_metta_file(metta_code)
 
     # Initialize a new MeTTa (Hyperon) instance for the connected user
     metta = MeTTa()
-    result = metta.run(metta_code)
+    output_raw = metta.run(metta_code)
 
-    message_counter = itertools.count(0)
+    message_counter = itertools.count(1)
 
-    await websocket.send(create_message(next(message_counter), MESSAGE_TYPE_SYSTEM,
-        f"<a target='_blank' href='https://services.metta-rift.fluiditylabs.dev/api/generated/metta/{filename}'>Download the generated MeTTa file</a>."))
-    await websocket.send(create_message(next(message_counter), MESSAGE_TYPE_SYSTEM, str(result)))
+    output = clean_metta_output(output_raw)
+
+    await websocket.send(create_message(True, next(message_counter), "", metta_code, output, str(output_raw)))
 
     try:
         async for message in websocket:
             # Process incoming messages and evaluate them using MeTTa
-            await websocket.send(create_message(next(message_counter), MESSAGE_TYPE_PLAYER, message))
-            result = metta.run(message)
-
-            # Send the result back to the client
-            await websocket.send(create_message(next(message_counter), MESSAGE_TYPE_SYSTEM, str(result)))
+            inference_raw = to_metta(message)
+            if inference_raw is not None:
+                output_raw = metta.run(inference_raw)
+                output = clean_metta_output(output_raw)
+                # Send the result back to the client
+                await websocket.send(create_message(True, next(message_counter), message, inference_raw, output, str(output_raw)))
+            else:
+                await websocket.send(create_message(False, next(message_counter), message, "", "", ""))
     except (ConnectionClosedOK, ConnectionClosedError):
         print("Connection closed.")
 
 
-def create_message(message_id: int, message_type: str, message_text: str):
+def clean_metta_output(metta_output: list) -> str:
+    def flatten(xs):
+        for x in xs:
+            if isinstance(x, (list, tuple)):
+                yield from flatten(x)
+            elif x is None:
+                continue
+            else:
+                yield str(x)
+
+    return " ".join(flatten(metta_output)).replace("\"", "")
+
+
+def create_message(valid: bool, message_number: int, inference: str, inference_raw: str, output: str, output_raw: str):
     return json.dumps({
-        "id": message_id,
-        "type": message_type,
-        "text": message_text
+        "valid": valid,
+        "number": message_number,
+        "inference": inference,
+        "inferenceRaw": inference_raw,
+        "output": output,
+        "outputRaw": output_raw
     })
+
+
+def to_metta(user_text: str, threshold: float = 0.55) -> str | None:
+    u = nlp_model.encode([user_text], normalize_embeddings=True)
+    sims = util.cos_sim(u, canonical_embeddings)[0]
+    idx = int(sims.argmax())
+    score = float(sims[idx])
+    if score < threshold:
+        return None
+
+    canonical = list(NLP_CANONICALS.values())[idx]
+
+    return f"!({canonical})"
 
 
 def create_room_mapping(rooms: List[str]) -> Dict[str, List[str]]:
@@ -79,15 +134,6 @@ def create_room_mapping(rooms: List[str]) -> Dict[str, List[str]]:
         # last room already has [] by default
 
     return mapping
-
-
-def save_metta_file(code: str) -> str:
-    unique_id = uuid.uuid4()
-    filename = f"{unique_id}.metta"
-    path = os.path.join(FILES_DIR, filename)
-    with open(path, "w") as f:
-        f.write(code)
-    return filename
 
 
 def generate_metta_code():
@@ -271,6 +317,8 @@ def generate_metta_code():
         (= (do-examine strange_figure) "A tall figure cloaked in dark, tattered robes, its face hidden under a deep hood. ")
         (= (do-examine $what) (empty))
 
+        (= (look-around) "You find:") 
+
         (= (look-around) 
             (match &self (At player $where)
                 (do-look-around (match &self (At $what $where) $what))
@@ -289,14 +337,14 @@ def generate_metta_code():
             )
         )
 
-        (= (do-look-around door) "A door")
-        (= (do-look-around mechanism1) "A mechanism")
-        (= (do-look-around lever) "A lever")
-        (= (do-look-around strange_figure) "A strange figure")
-        (= (do-look-around white_room) "White room entrance")
-        (= (do-look-around red_room) "Red room entrance")
-        (= (do-look-around blue_room) "Blue room entrance")
-        (= (do-look-around yellow_room) "Yellow room entrance")
+        (= (do-look-around door) "A door.")
+        (= (do-look-around mechanism1) "A mechanism.")
+        (= (do-look-around lever) "A lever.")
+        (= (do-look-around strange_figure) "A strange figure.")
+        (= (do-look-around white_room) "The white room entrance.")
+        (= (do-look-around red_room) "The red room entrance.")
+        (= (do-look-around blue_room) "The blue room entrance.")
+        (= (do-look-around yellow_room) "The yellow room entrance.")
 
         (= (do-look-around $what) (empty))
 
@@ -327,7 +375,7 @@ def generate_metta_code():
         (= (do-use lever hole) "You insert the lever into the hole and give it a turn. What now?")
         (= (do-use lever hole) (add-atom &self (Unlocked lock2)))
 
-        (= (exit) 
+        (= (leave) 
             (if (and 
                     (exists (Unlocked lock1))
                     (exists (Unlocked lock2))
@@ -345,7 +393,7 @@ def generate_metta_code():
         )
         (= (stay) "The door locks again. Great. The creepy figure actually looks... happy?")
 
-        !("You wake in a white room, sterile and silent. No memory of how you got here.")
+        (= (intro) "You wake in a white room, sterile and silent. No memory of how you got here.")
     """)
 
     return TEMPLATE.format(
