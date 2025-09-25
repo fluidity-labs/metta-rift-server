@@ -32,7 +32,7 @@ NLP_CANONICALS = {
     "examine lever": "examine lever",
     "examine mechanism": "examine mechanism1",
     "examine strange figure": "examine strange_figure",
-    "look around": "look-around",
+    "take a look around": "look-around",
     "use lever": "use lever",
     "use lever on mechanism": "use lever mechanism1",
     "user lever on hole": "use lever hole",
@@ -96,7 +96,7 @@ def create_message(valid: bool, message_number: int, inference: str, inference_r
     })
 
 
-def to_metta(user_text: str, threshold: float = 0.55) -> str | None:
+def to_metta(user_text: str, threshold: float = 0.6) -> str | None:
     u = nlp_model.encode([user_text], normalize_embeddings=True)
     sims = util.cos_sim(u, canonical_embeddings)[0]
     idx = int(sims.argmax())
@@ -393,7 +393,7 @@ def generate_metta_code():
         )
         (= (stay) "The door locks again. Great. The creepy figure actually looks... happy?")
 
-        (= (intro) "You wake in a white room, sterile and silent. No memory of how you got here.")
+        (= (intro) "You wake in a white room, sterile and silent. No memory of how you got here. Better take a look around.")
     """)
 
     return TEMPLATE.format(
